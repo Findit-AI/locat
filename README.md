@@ -76,25 +76,25 @@ Measured on Apple Silicon with `cargo bench` (Criterion). All times are per-oper
 
 | Format | Time | Throughput |
 |--------|------|------------|
-| Minimal (`+00+000/`) | ~31 ns | 240 MiB/s |
-| DMS integer (`+404243-0740002/`) | ~34 ns | 436 MiB/s |
-| Decimal degrees (`+40.7128-074.0060/`) | ~50 ns | 340 MiB/s |
-| Deg+Min (`+4042.7700-07400.3600/`) | ~53 ns | 394 MiB/s |
-| DMS decimal (`+404243.123000-0740002.456000/`) | ~56 ns | 506 MiB/s |
-| With altitude (`+27.5916+086.5640+8848/`) | ~68 ns | 318 MiB/s |
-| With altitude+CRS (`+27.5916+086.5640+8848CRSepsg4326/`) | ~68 ns | 477 MiB/s |
+| Minimal (`+00+000/`) | ~18 ns | 424 MiB/s |
+| DMS integer (`+404243-0740002/`) | ~22 ns | 704 MiB/s |
+| Decimal degrees (`+40.7128-074.0060/`) | ~27 ns | 634 MiB/s |
+| Deg+Min (`+4042.7700-07400.3600/`) | ~30 ns | 708 MiB/s |
+| DMS decimal (`+404243.123000-0740002.456000/`) | ~34 ns | 840 MiB/s |
+| With altitude (`+27.5916+086.5640+8848/`) | ~32 ns | 680 MiB/s |
+| With altitude+CRS (`+27.5916+086.5640+8848CRSepsg4326/`) | ~37 ns | 884 MiB/s |
 
 ### Round-trip (parse + `Display`)
 
 | Format | Time |
 |--------|------|
-| DMS integer | ~166 ns |
-| Minimal | ~181 ns |
-| DMS decimal | ~314 ns |
-| Decimal degrees | ~512 ns |
-| Deg+Min | ~521 ns |
-| With altitude | ~592 ns |
-| With altitude+CRS | ~638 ns |
+| DMS integer | ~184 ns |
+| Minimal | ~180 ns |
+| DMS decimal | ~339 ns |
+| Decimal degrees | ~489 ns |
+| Deg+Min | ~497 ns |
+| With altitude | ~556 ns |
+| With altitude+CRS | ~622 ns |
 
 ### Conversion
 
@@ -102,7 +102,7 @@ Measured on Apple Silicon with `cargo bench` (Criterion). All times are per-oper
 
 ### Batch throughput
 
-Parsing 1,000 mixed-format coordinates: **~51 µs** (~400 MiB/s).
+Parsing 1,000 mixed-format coordinates: **~48 µs** (~430 MiB/s).
 
 Run benchmarks yourself:
 
