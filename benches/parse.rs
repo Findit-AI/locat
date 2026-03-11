@@ -23,6 +23,7 @@ static INPUTS: &[(&str, &str)] = &[
   ("minimal", MINIMAL),
 ];
 
+#[cfg(not(miri))]
 fn bench_parse(c: &mut Criterion) {
   let mut group = c.benchmark_group("parse");
 
@@ -36,6 +37,7 @@ fn bench_parse(c: &mut Criterion) {
   group.finish();
 }
 
+#[cfg(not(miri))]
 fn bench_roundtrip(c: &mut Criterion) {
   let mut group = c.benchmark_group("roundtrip");
 
@@ -52,6 +54,7 @@ fn bench_roundtrip(c: &mut Criterion) {
   group.finish();
 }
 
+#[cfg(not(miri))]
 fn bench_to_decimal_degrees(c: &mut Criterion) {
   let mut group = c.benchmark_group("to_decimal_degrees");
 
@@ -65,6 +68,7 @@ fn bench_to_decimal_degrees(c: &mut Criterion) {
   group.finish();
 }
 
+#[cfg(not(miri))]
 fn bench_batch(c: &mut Criterion) {
   // Parse many coordinates in sequence to measure throughput
   let batch: Vec<&str> = INPUTS.iter().map(|&(_, s)| s).cycle().take(1000).collect();
@@ -82,6 +86,7 @@ fn bench_batch(c: &mut Criterion) {
   group.finish();
 }
 
+#[cfg(not(miri))]
 criterion_group!(
   benches,
   bench_parse,
@@ -89,4 +94,9 @@ criterion_group!(
   bench_to_decimal_degrees,
   bench_batch
 );
+
+#[cfg(not(miri))]
 criterion_main!(benches);
+
+#[cfg(miri)]
+fn main() {}
