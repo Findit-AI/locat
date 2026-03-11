@@ -68,6 +68,48 @@ assert_eq!(coord.to_string(), input);
 
 Optional trailing components: `[±Altitude][CRS<id>]/`
 
+## Benchmarks
+
+Measured on Apple Silicon with `cargo bench` (Criterion). All times are per-operation.
+
+### Parse (single coordinate)
+
+| Format | Time | Throughput |
+|--------|------|------------|
+| Minimal (`+00+000/`) | ~31 ns | 240 MiB/s |
+| DMS integer (`+404243-0740002/`) | ~34 ns | 436 MiB/s |
+| Decimal degrees (`+40.7128-074.0060/`) | ~50 ns | 340 MiB/s |
+| Deg+Min (`+4042.7700-07400.3600/`) | ~53 ns | 394 MiB/s |
+| DMS decimal (`+404243.123000-0740002.456000/`) | ~56 ns | 506 MiB/s |
+| With altitude (`+27.5916+086.5640+8848/`) | ~68 ns | 318 MiB/s |
+| With altitude+CRS (`+27.5916+086.5640+8848CRSepsg4326/`) | ~68 ns | 477 MiB/s |
+
+### Round-trip (parse + `Display`)
+
+| Format | Time |
+|--------|------|
+| DMS integer | ~166 ns |
+| Minimal | ~181 ns |
+| DMS decimal | ~314 ns |
+| Decimal degrees | ~512 ns |
+| Deg+Min | ~521 ns |
+| With altitude | ~592 ns |
+| With altitude+CRS | ~638 ns |
+
+### Conversion
+
+`to_decimal_degrees()` completes in **~1 ns** regardless of input format.
+
+### Batch throughput
+
+Parsing 1,000 mixed-format coordinates: **~51 µs** (~400 MiB/s).
+
+Run benchmarks yourself:
+
+```sh
+cargo bench
+```
+
 #### License
 
 `locat` is under the terms of both the MIT license and the
