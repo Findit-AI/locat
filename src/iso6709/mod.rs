@@ -109,40 +109,30 @@ const fn digit3(b: &[u8]) -> u16 {
 
 /// Fast f64 parser for regex-validated `DIGITS[.DIGITS]` strings.
 ///
-/// Avoids the full `str::parse::<f64>()` which handles scientific notation,
-/// infinity, NaN, etc. Since logos validates the format, we only need simple
-/// integer + optional fractional digit parsing.
+/// Accumulates directly into `f64` to avoid `u64` overflow on long numeric
+/// inputs (e.g. altitude) and to remain `no_std`-compatible (no `f64::powi`).
 #[cfg_attr(not(tarpaulin), inline(always))]
 fn fast_parse_f64(b: &[u8]) -> f64 {
   match memchr_dot(b) {
     None => {
-      let mut val: u64 = 0;
+      let mut val: f64 = 0.0;
       for &byte in b {
-        val = val * 10 + (byte - b'0') as u64;
+        val = val * 10.0 + (byte - b'0') as f64;
       }
-      val as f64
+      val
     }
     Some(dot) => {
-      let mut int_val: u64 = 0;
+      let mut int_val: f64 = 0.0;
       for &byte in &b[..dot] {
-        int_val = int_val * 10 + (byte - b'0') as u64;
+        int_val = int_val * 10.0 + (byte - b'0') as f64;
       }
-      let frac_bytes = &b[dot + 1..];
-      let mut frac_val: u64 = 0;
-      for &byte in frac_bytes {
-        frac_val = frac_val * 10 + (byte - b'0') as u64;
+      let mut frac: f64 = 0.0;
+      let mut base: f64 = 0.1;
+      for &byte in &b[dot + 1..] {
+        frac += (byte - b'0') as f64 * base;
+        base *= 0.1;
       }
-      // Use a lookup table for common fractional lengths to avoid pow().
-      let divisor = match frac_bytes.len() {
-        1 => 10.0,
-        2 => 100.0,
-        3 => 1_000.0,
-        4 => 10_000.0,
-        5 => 100_000.0,
-        6 => 1_000_000.0,
-        n => 10f64.powi(n as i32),
-      };
-      int_val as f64 + frac_val as f64 / divisor
+      int_val + frac
     }
   }
 }
@@ -279,7 +269,7 @@ fn parse_lon_deg(s: &str) -> Result<Longitude, ParseError> {
 fn parse_lon_deg_min(s: &str) -> Result<Longitude, ParseError> {
   let b = s.as_bytes();
   let sign = Sign::from_byte(b[0]);
-  let degrees = digit3(&b[1..4]) as u16;
+  let degrees = digit3(&b[1..4]);
   if degrees > 180 {
     return Err(ParseError::OutOfRange {
       component: Component::Longitude,
@@ -306,7 +296,7 @@ fn parse_lon_deg_min(s: &str) -> Result<Longitude, ParseError> {
 fn parse_lon_dms(s: &str) -> Result<Longitude, ParseError> {
   let b = s.as_bytes();
   let sign = Sign::from_byte(b[0]);
-  let degrees = digit3(&b[1..4]) as u16;
+  let degrees = digit3(&b[1..4]);
   if degrees > 180 {
     return Err(ParseError::OutOfRange {
       component: Component::Longitude,
@@ -1002,5 +992,20 @@ mod tests {
     assert!(coord.longitude().sign().is_pos());
     let lon = coord.longitude().to_decimal_degrees();
     assert!(lon > 0.0);
+  }
+
+  // ---- Long numeric inputs (overflow safety) ----
+
+  #[test]
+  fn parse_long_altitude_no_panic() {
+    // Altitude with >19 digits should not panic from u64 overflow.
+    let coord = parse("+40-074+12345678901234567890/").unwrap();
+    assert!(coord.altitude().is_some());
+  }
+
+  #[test]
+  fn parse_long_decimal_altitude_no_panic() {
+    let coord = parse("+40-074+99999999999999999999.12345678901234/").unwrap();
+    assert!(coord.altitude().is_some());
   }
 }
