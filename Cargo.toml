@@ -1,13 +1,15 @@
 [package]
-name = "template-rs"
-version = "0.0.0"
-edition = "2021"
-repository = "https://github.com/al8n/template-rs"
-homepage = "https://github.com/al8n/template-rs"
-documentation = "https://docs.rs/template-rs"
-description = "A template for creating Rust open-source repo on GitHub"
+name = "locat"
+version = "0.1.0"
+edition = "2024"
+repository = "https://github.com/Findit-AI/locat"
+homepage = "https://github.com/Findit-AI/locat"
+documentation = "https://docs.rs/locat"
+description = "A zero-copy ISO 6709 geographic coordinate parser in Rust."
 license = "MIT OR Apache-2.0"
-rust-version = "1.73"
+rust-version = "1.85"
+keywords = ["iso6709", "geographic", "coordinates", "latitude", "longitude"]
+categories = ["parser-implementations", "no-std::no-alloc", "encoding"]
 
 [[bench]]
 path = "benches/foo.rs"
@@ -17,9 +19,12 @@ harness = false
 [features]
 default = ["std"]
 alloc = []
-std = []
+std = ["thiserror/std"]
 
 [dependencies]
+derive_more = { version = "2", default-features = false, features = ["display", "is_variant", "unwrap", "try_unwrap"] }
+logos = { version = "0.16", default-features = false, features = ["export_derive"] }
+thiserror = { version = "2", default-features = false }
 
 [dev-dependencies]
 criterion = "0.8"
