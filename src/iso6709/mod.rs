@@ -91,9 +91,65 @@ fn next_token<'a>(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Fast numeric helpers (byte-arithmetic, regex-validated input)
+// ---------------------------------------------------------------------------
+
+/// Parse exactly 2 ASCII digit bytes into a `u8`.
 #[cfg_attr(not(tarpaulin), inline(always))]
-fn num_err(position: usize) -> ParseError {
-  ParseError::InvalidNumber { position }
+const fn digit2(b: &[u8]) -> u8 {
+  (b[0] - b'0') * 10 + (b[1] - b'0')
+}
+
+/// Parse exactly 3 ASCII digit bytes into a `u16`.
+#[cfg_attr(not(tarpaulin), inline(always))]
+const fn digit3(b: &[u8]) -> u16 {
+  (b[0] - b'0') as u16 * 100 + (b[1] - b'0') as u16 * 10 + (b[2] - b'0') as u16
+}
+
+/// Fast f64 parser for regex-validated `DIGITS[.DIGITS]` strings.
+///
+/// Avoids the full `str::parse::<f64>()` which handles scientific notation,
+/// infinity, NaN, etc. Since logos validates the format, we only need simple
+/// integer + optional fractional digit parsing.
+#[cfg_attr(not(tarpaulin), inline(always))]
+fn fast_parse_f64(b: &[u8]) -> f64 {
+  match memchr_dot(b) {
+    None => {
+      let mut val: u64 = 0;
+      for &byte in b {
+        val = val * 10 + (byte - b'0') as u64;
+      }
+      val as f64
+    }
+    Some(dot) => {
+      let mut int_val: u64 = 0;
+      for &byte in &b[..dot] {
+        int_val = int_val * 10 + (byte - b'0') as u64;
+      }
+      let frac_bytes = &b[dot + 1..];
+      let mut frac_val: u64 = 0;
+      for &byte in frac_bytes {
+        frac_val = frac_val * 10 + (byte - b'0') as u64;
+      }
+      // Use a lookup table for common fractional lengths to avoid pow().
+      let divisor = match frac_bytes.len() {
+        1 => 10.0,
+        2 => 100.0,
+        3 => 1_000.0,
+        4 => 10_000.0,
+        5 => 100_000.0,
+        6 => 1_000_000.0,
+        n => 10f64.powi(n as i32),
+      };
+      int_val as f64 + frac_val as f64 / divisor
+    }
+  }
+}
+
+#[cfg_attr(not(tarpaulin), inline(always))]
+fn memchr_dot(b: &[u8]) -> Option<usize> {
+  b.iter().position(|&c| c == b'.')
 }
 
 // ---------------------------------------------------------------------------
@@ -115,8 +171,9 @@ fn parse_latitude<'a>(lexer: &mut Lexer<'a, Token<'a>>) -> Result<Latitude, Pars
 
 /// Parse `±DD[.D+]` into `Latitude::Deg`.
 fn parse_lat_deg(s: &str) -> Result<Latitude, ParseError> {
-  let sign = Sign::from_byte(s.as_bytes()[0]);
-  let degrees: f64 = s[1..].parse().map_err(|_| num_err(0))?;
+  let b = s.as_bytes();
+  let sign = Sign::from_byte(b[0]);
+  let degrees = fast_parse_f64(&b[1..]);
   if degrees > 90.0 {
     return Err(ParseError::OutOfRange {
       component: Component::Latitude,
@@ -128,15 +185,16 @@ fn parse_lat_deg(s: &str) -> Result<Latitude, ParseError> {
 
 /// Parse `±DDMM[.M+]` into `Latitude::DegMin`.
 fn parse_lat_deg_min(s: &str) -> Result<Latitude, ParseError> {
-  let sign = Sign::from_byte(s.as_bytes()[0]);
-  let degrees: u8 = s[1..3].parse().map_err(|_| num_err(0))?;
+  let b = s.as_bytes();
+  let sign = Sign::from_byte(b[0]);
+  let degrees = digit2(&b[1..3]);
   if degrees > 90 {
     return Err(ParseError::OutOfRange {
       component: Component::Latitude,
       value: degrees as f64,
     });
   }
-  let minutes: f64 = s[3..].parse().map_err(|_| num_err(0))?;
+  let minutes = fast_parse_f64(&b[3..]);
   if minutes >= 60.0 {
     return Err(ParseError::OutOfRange {
       component: Component::Minutes,
@@ -154,22 +212,23 @@ fn parse_lat_deg_min(s: &str) -> Result<Latitude, ParseError> {
 
 /// Parse `±DDMMSS[.S+]` into `Latitude::DMS`.
 fn parse_lat_dms(s: &str) -> Result<Latitude, ParseError> {
-  let sign = Sign::from_byte(s.as_bytes()[0]);
-  let degrees: u8 = s[1..3].parse().map_err(|_| num_err(0))?;
+  let b = s.as_bytes();
+  let sign = Sign::from_byte(b[0]);
+  let degrees = digit2(&b[1..3]);
   if degrees > 90 {
     return Err(ParseError::OutOfRange {
       component: Component::Latitude,
       value: degrees as f64,
     });
   }
-  let minutes: u8 = s[3..5].parse().map_err(|_| num_err(0))?;
+  let minutes = digit2(&b[3..5]);
   if minutes >= 60 {
     return Err(ParseError::OutOfRange {
       component: Component::Minutes,
       value: minutes as f64,
     });
   }
-  let seconds: f64 = s[5..].parse().map_err(|_| num_err(0))?;
+  let seconds = fast_parse_f64(&b[5..]);
   if seconds >= 60.0 {
     return Err(ParseError::OutOfRange {
       component: Component::Seconds,
@@ -204,8 +263,9 @@ fn parse_longitude<'a>(lexer: &mut Lexer<'a, Token<'a>>) -> Result<Longitude, Pa
 
 /// Parse `±DDD[.D+]` into `Longitude::Deg`.
 fn parse_lon_deg(s: &str) -> Result<Longitude, ParseError> {
-  let sign = Sign::from_byte(s.as_bytes()[0]);
-  let degrees: f64 = s[1..].parse().map_err(|_| num_err(0))?;
+  let b = s.as_bytes();
+  let sign = Sign::from_byte(b[0]);
+  let degrees = fast_parse_f64(&b[1..]);
   if degrees > 180.0 {
     return Err(ParseError::OutOfRange {
       component: Component::Longitude,
@@ -217,15 +277,16 @@ fn parse_lon_deg(s: &str) -> Result<Longitude, ParseError> {
 
 /// Parse `±DDDMM[.M+]` into `Longitude::DegMin`.
 fn parse_lon_deg_min(s: &str) -> Result<Longitude, ParseError> {
-  let sign = Sign::from_byte(s.as_bytes()[0]);
-  let degrees: u16 = s[1..4].parse().map_err(|_| num_err(0))?;
+  let b = s.as_bytes();
+  let sign = Sign::from_byte(b[0]);
+  let degrees = digit3(&b[1..4]) as u16;
   if degrees > 180 {
     return Err(ParseError::OutOfRange {
       component: Component::Longitude,
       value: degrees as f64,
     });
   }
-  let minutes: f64 = s[4..].parse().map_err(|_| num_err(0))?;
+  let minutes = fast_parse_f64(&b[4..]);
   if minutes >= 60.0 {
     return Err(ParseError::OutOfRange {
       component: Component::Minutes,
@@ -243,22 +304,23 @@ fn parse_lon_deg_min(s: &str) -> Result<Longitude, ParseError> {
 
 /// Parse `±DDDMMSS[.S+]` into `Longitude::DMS`.
 fn parse_lon_dms(s: &str) -> Result<Longitude, ParseError> {
-  let sign = Sign::from_byte(s.as_bytes()[0]);
-  let degrees: u16 = s[1..4].parse().map_err(|_| num_err(0))?;
+  let b = s.as_bytes();
+  let sign = Sign::from_byte(b[0]);
+  let degrees = digit3(&b[1..4]) as u16;
   if degrees > 180 {
     return Err(ParseError::OutOfRange {
       component: Component::Longitude,
       value: degrees as f64,
     });
   }
-  let minutes: u8 = s[4..6].parse().map_err(|_| num_err(0))?;
+  let minutes = digit2(&b[4..6]);
   if minutes >= 60 {
     return Err(ParseError::OutOfRange {
       component: Component::Minutes,
       value: minutes as f64,
     });
   }
-  let seconds: f64 = s[6..].parse().map_err(|_| num_err(0))?;
+  let seconds = fast_parse_f64(&b[6..]);
   if seconds >= 60.0 {
     return Err(ParseError::OutOfRange {
       component: Component::Seconds,
@@ -316,8 +378,9 @@ fn parse_tail<'a>(
 }
 
 fn parse_altitude(s: &str) -> Result<Altitude, ParseError> {
-  let sign = Sign::from_byte(s.as_bytes()[0]);
-  let value: f64 = s[1..].parse().map_err(|_| num_err(0))?;
+  let b = s.as_bytes();
+  let sign = Sign::from_byte(b[0]);
+  let value = fast_parse_f64(&b[1..]);
   Ok(Altitude::new(sign, value))
 }
 

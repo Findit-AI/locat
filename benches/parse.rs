@@ -1,3 +1,5 @@
+#![cfg(not(miri))] // Miri is too slow for these benchmarks
+
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
