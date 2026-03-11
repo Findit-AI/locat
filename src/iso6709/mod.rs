@@ -551,4 +551,393 @@ mod tests {
     assert!((lat - 27.5916).abs() < 1e-10);
     assert!((lon - 86.5640).abs() < 1e-10);
   }
+
+  // ---- Struct accessor coverage ----
+
+  #[test]
+  fn lat_deg_accessors() {
+    let coord = parse("+40.7128-074.0060/").unwrap();
+    match coord.latitude() {
+      Latitude::Deg(v) => {
+        assert!(v.sign().is_pos());
+        assert!((v.degrees() - 40.7128).abs() < 1e-10);
+      }
+      other => panic!("expected Deg, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn lat_deg_min_accessors() {
+    let coord = parse("+4042.77-07400.36/").unwrap();
+    match coord.latitude() {
+      Latitude::DegMin(v) => {
+        assert!(v.sign().is_pos());
+        assert_eq!(v.degrees(), 40);
+        assert!((v.minutes() - 42.77).abs() < 1e-10);
+      }
+      other => panic!("expected DegMin, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn lat_dms_accessors() {
+    let coord = parse("+404243.5-0740002/").unwrap();
+    match coord.latitude() {
+      Latitude::DMS(v) => {
+        assert!(v.sign().is_pos());
+        assert_eq!(v.degrees(), 40);
+        assert_eq!(v.minutes(), 42);
+        assert!((v.seconds() - 43.5).abs() < 1e-10);
+      }
+      other => panic!("expected DMS, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn lon_deg_accessors() {
+    let coord = parse("+40.7128-074.0060/").unwrap();
+    match coord.longitude() {
+      Longitude::Deg(v) => {
+        assert!(v.sign().is_neg());
+        assert!((v.degrees() - 74.006).abs() < 1e-10);
+      }
+      other => panic!("expected Deg, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn lon_deg_min_accessors() {
+    let coord = parse("+4042.77-07400.36/").unwrap();
+    match coord.longitude() {
+      Longitude::DegMin(v) => {
+        assert!(v.sign().is_neg());
+        assert_eq!(v.degrees(), 74);
+        assert!((v.minutes() - 0.36).abs() < 1e-10);
+      }
+      other => panic!("expected DegMin, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn lon_dms_accessors() {
+    let coord = parse("+404243-0740002.5/").unwrap();
+    match coord.longitude() {
+      Longitude::DMS(v) => {
+        assert!(v.sign().is_neg());
+        assert_eq!(v.degrees(), 74);
+        assert_eq!(v.minutes(), 0);
+        assert!((v.seconds() - 2.5).abs() < 1e-10);
+      }
+      other => panic!("expected DMS, got {other:?}"),
+    }
+  }
+
+  #[test]
+  fn altitude_accessors() {
+    let coord = parse("+27.5916+086.5640+8848.86CRSepsg4326/").unwrap();
+    let alt = coord.altitude().unwrap();
+    assert!(alt.sign().is_pos());
+    assert!((alt.value() - 8848.86).abs() < 1e-10);
+    assert!((alt.to_meters() - 8848.86).abs() < 1e-10);
+  }
+
+  // ---- Longitude sign/to_decimal_degrees for DegMin and DMS ----
+
+  #[test]
+  fn lon_deg_min_to_decimal() {
+    let coord = parse("+4042.77-07400.36/").unwrap();
+    let lon = coord.longitude().to_decimal_degrees();
+    assert!((lon - (-74.006)).abs() < 1e-3);
+    assert!(coord.longitude().sign().is_neg());
+  }
+
+  #[test]
+  fn lon_dms_to_decimal() {
+    let coord = parse("+404243-0740002/").unwrap();
+    let lon = coord.longitude().to_decimal_degrees();
+    assert!(lon < -73.0 && lon > -75.0);
+    assert!(coord.longitude().sign().is_neg());
+  }
+
+  #[test]
+  fn lat_sign_south() {
+    let coord = parse("-40.7128+074.0060/").unwrap();
+    assert!(coord.latitude().sign().is_neg());
+    assert!((coord.latitude().to_decimal_degrees() - (-40.7128)).abs() < 1e-10);
+  }
+
+  // ---- Display with decimal fractions (DegMin/DMS branches) ----
+
+  #[test]
+  fn roundtrip_deg_min_decimal() {
+    extern crate std;
+    use std::string::ToString;
+
+    let input = "+4042.7700-07400.3600/";
+    let coord = parse(input).unwrap();
+    assert_eq!(coord.to_string(), input);
+  }
+
+  #[test]
+  fn roundtrip_dms_decimal_seconds() {
+    extern crate std;
+    use std::string::ToString;
+
+    let input = "+404243.123000-0740002.456000/";
+    let coord = parse(input).unwrap();
+    assert_eq!(coord.to_string(), input);
+  }
+
+  #[test]
+  fn roundtrip_altitude_decimal() {
+    extern crate std;
+    use std::string::ToString;
+
+    let input = "+27.5916+086.5640+8848.86CRSepsg4326/";
+    let coord = parse(input).unwrap();
+    assert_eq!(coord.to_string(), input);
+  }
+
+  // ---- Error formatting coverage ----
+
+  #[test]
+  fn error_display_messages() {
+    extern crate std;
+    use std::string::ToString;
+
+    // OutOfRange display
+    let err = parse("+91+000/").unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("latitude degrees"));
+    assert!(msg.contains("91"));
+
+    // Unexpected display
+    let err = parse("+40.7128-074.0060").unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("unexpected"));
+
+    // Component display for all variants
+    assert_eq!(Component::Latitude.to_string(), "latitude degrees");
+    assert_eq!(Component::Longitude.to_string(), "longitude degrees");
+    assert_eq!(Component::Minutes.to_string(), "minutes");
+    assert_eq!(Component::Seconds.to_string(), "seconds");
+  }
+
+  // ---- Invalid input / error path coverage ----
+
+  #[test]
+  fn reject_totally_invalid_input() {
+    // Should trigger lexer error or unexpected token
+    assert!(parse("hello/").is_err());
+  }
+
+  #[test]
+  fn reject_empty_input() {
+    let err = parse("").unwrap_err();
+    assert!(err.is_unexpected());
+  }
+
+  #[test]
+  fn reject_wrong_token_for_latitude() {
+    // 3-digit signed = longitude token in latitude position
+    assert!(parse("+000+000/").is_err());
+  }
+
+  #[test]
+  fn reject_wrong_token_for_longitude() {
+    // 2-digit signed in longitude position
+    assert!(parse("+40+00/").is_err());
+  }
+
+  #[test]
+  fn reject_lat_90_with_nonzero_minutes() {
+    let err = parse("+9030+00000/").unwrap_err();
+    assert!(err.is_out_of_range());
+  }
+
+  #[test]
+  fn reject_lon_180_with_nonzero_minutes() {
+    let err = parse("+00+18030/").unwrap_err();
+    assert!(err.is_out_of_range());
+  }
+
+  #[test]
+  fn reject_lat_90_with_nonzero_dms() {
+    let err = parse("+900001+0000000/").unwrap_err();
+    assert!(err.is_out_of_range());
+  }
+
+  #[test]
+  fn reject_lon_180_with_nonzero_dms() {
+    let err = parse("+000000+1800001/").unwrap_err();
+    assert!(err.is_out_of_range());
+  }
+
+  #[test]
+  fn reject_garbage_after_longitude() {
+    // Should fail in parse_tail
+    assert!(parse("+40-074hello/").is_err());
+  }
+
+  #[test]
+  fn reject_garbage_after_altitude() {
+    // Altitude then invalid token (not CRS or solidus)
+    assert!(parse("+40-074+100hello/").is_err());
+  }
+
+  #[test]
+  fn reject_missing_solidus_after_crs() {
+    assert!(parse("+40-074CRSfoo").is_err());
+  }
+
+  #[test]
+  fn reject_missing_solidus_after_alt_crs() {
+    assert!(parse("+40-074+100CRSfoo").is_err());
+  }
+
+  // ---- Latitude DegMin to_decimal_degrees ----
+
+  #[test]
+  fn lat_deg_min_to_decimal() {
+    let coord = parse("+4042.77-07400.36/").unwrap();
+    let lat = coord.latitude().to_decimal_degrees();
+    // 40 + 42.77/60 ≈ 40.7128
+    assert!((lat - 40.71283333).abs() < 1e-4);
+  }
+
+  #[test]
+  fn lat_dms_to_decimal() {
+    let coord = parse("+404243-0740002/").unwrap();
+    let lat = coord.latitude().to_decimal_degrees();
+    // 40 + 42/60 + 43/3600 ≈ 40.7119
+    assert!((lat - 40.71194).abs() < 1e-4);
+  }
+
+  // ---- Validation error branches for DegMin/DMS ----
+
+  #[test]
+  fn reject_lat_deg_min_over_90() {
+    let err = parse("+9100+00000/").unwrap_err();
+    match err {
+      ParseError::OutOfRange { component, .. } => assert!(component.is_latitude()),
+      _ => panic!("expected OutOfRange, got {err:?}"),
+    }
+  }
+
+  #[test]
+  fn reject_lat_dms_degrees_over_90() {
+    let err = parse("+910000+0000000/").unwrap_err();
+    match err {
+      ParseError::OutOfRange { component, .. } => assert!(component.is_latitude()),
+      _ => panic!("expected OutOfRange, got {err:?}"),
+    }
+  }
+
+  #[test]
+  fn reject_lat_dms_minutes_over_59() {
+    let err = parse("+006000+0000000/").unwrap_err();
+    match err {
+      ParseError::OutOfRange { component, .. } => assert!(component.is_minutes()),
+      _ => panic!("expected OutOfRange, got {err:?}"),
+    }
+  }
+
+  #[test]
+  fn reject_lon_deg_min_over_180() {
+    let err = parse("+00+18100/").unwrap_err();
+    match err {
+      ParseError::OutOfRange { component, .. } => assert!(component.is_longitude()),
+      _ => panic!("expected OutOfRange, got {err:?}"),
+    }
+  }
+
+  #[test]
+  fn reject_lon_deg_min_minutes_over_59() {
+    let err = parse("+0000+00060/").unwrap_err();
+    match err {
+      ParseError::OutOfRange { component, .. } => assert!(component.is_minutes()),
+      _ => panic!("expected OutOfRange, got {err:?}"),
+    }
+  }
+
+  #[test]
+  fn reject_lon_dms_degrees_over_180() {
+    let err = parse("+000000+1810000/").unwrap_err();
+    match err {
+      ParseError::OutOfRange { component, .. } => assert!(component.is_longitude()),
+      _ => panic!("expected OutOfRange, got {err:?}"),
+    }
+  }
+
+  #[test]
+  fn reject_lon_dms_minutes_over_59() {
+    let err = parse("+000000+0006000/").unwrap_err();
+    match err {
+      ParseError::OutOfRange { component, .. } => assert!(component.is_minutes()),
+      _ => panic!("expected OutOfRange, got {err:?}"),
+    }
+  }
+
+  #[test]
+  fn reject_lon_dms_seconds_over_59() {
+    let err = parse("+000000+0000060/").unwrap_err();
+    match err {
+      ParseError::OutOfRange { component, .. } => assert!(component.is_seconds()),
+      _ => panic!("expected OutOfRange, got {err:?}"),
+    }
+  }
+
+  // ---- Display coverage for integer DegMin/DMS longitude ----
+
+  #[test]
+  fn roundtrip_deg_min_integer() {
+    extern crate std;
+    use std::string::ToString;
+
+    let input = "+4042-07400/";
+    let coord = parse(input).unwrap();
+    assert_eq!(coord.to_string(), input);
+  }
+
+  #[test]
+  fn roundtrip_dms_integer_lon() {
+    extern crate std;
+    use std::string::ToString;
+
+    let input = "+404243-0740002/";
+    let coord = parse(input).unwrap();
+    assert_eq!(coord.to_string(), input);
+  }
+
+  // ---- Latitude sign for DegMin/DMS south ----
+
+  #[test]
+  fn lat_deg_min_sign_south() {
+    let coord = parse("-4042+07400/").unwrap();
+    assert!(coord.latitude().sign().is_neg());
+  }
+
+  #[test]
+  fn lat_dms_sign_south() {
+    let coord = parse("-404243+0740002/").unwrap();
+    assert!(coord.latitude().sign().is_neg());
+  }
+
+  // ---- Positive longitude sign/to_decimal for DegMin/DMS ----
+
+  #[test]
+  fn lon_deg_min_sign_positive() {
+    let coord = parse("+4042+07400/").unwrap();
+    assert!(coord.longitude().sign().is_pos());
+    let lon = coord.longitude().to_decimal_degrees();
+    assert!(lon > 0.0);
+  }
+
+  #[test]
+  fn lon_dms_sign_positive() {
+    let coord = parse("+404243+0740002/").unwrap();
+    assert!(coord.longitude().sign().is_pos());
+    let lon = coord.longitude().to_decimal_degrees();
+    assert!(lon > 0.0);
+  }
 }
