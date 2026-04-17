@@ -117,7 +117,7 @@ Apache License (Version 2.0).
 
 See [LICENSE-APACHE](LICENSE-APACHE), [LICENSE-MIT](LICENSE-MIT) for details.
 
-Copyright (c) 2026 Al Liu.
+Copyright (c) 2026 FinDIT Studio authors.
 
 [Github-url]: https://github.com/findit-ai/locat/
 [CI-url]: https://github.com/findit-ai/locat/actions/workflows/ci.yml
